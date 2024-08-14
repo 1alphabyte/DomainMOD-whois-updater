@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -12,13 +13,12 @@ import (
 )
 
 type Domain struct {
-	ID      int
-	Domain  string
-	ExpDate string
+	ID              int
+	Domain, ExpDate string
 }
 
 func setUpDB() *sql.DB {
-	db, err := sql.Open("mysql", "domainmod:vVZraEnJsuYz37J5Ge0K@tcp(db:3306)/domainmod")
+	db, err := sql.Open("mysql", strings.Join([]string{os.Getenv("DB_user"), ":", os.Getenv("DB_password"), "@tcp(", os.Getenv("DB_host"), ":3306)/domainmod"}, ""))
 	if err != nil {
 		log.Panic(err)
 	}
@@ -75,26 +75,53 @@ func main() {
 					continue
 				}
 				log.Println(strings.Split(res.Domain.ExpirationDate, "T")[0], res.Registrar.Name, res.Domain.NameServers)
-				var regID int
-				rows, err := db.Query("SELECT id FROM registrars WHERE name = ?", res.Registrar.Name)
-				if err != nil && err != sql.ErrNoRows {
-					log.Println(err)
-					continue
-				} else if err == sql.ErrNoRows {
-					row, err := db.Exec("INSERT INTO registrars (name, url, notes) VALUES (?, ?, 'None')", res.Registrar.Name, res.Registrar.ReferralURL)
-					if err != nil {
+				var regID, accID int
+				row := db.QueryRow("SELECT id FROM registrars WHERE name = ?", res.Registrar.Name)
+				var id int
+				err = row.Scan(&id)
+				if err != nil {
+					if err == sql.ErrNoRows {
+						result, err := db.Exec("INSERT INTO registrars (name, url, notes, insert_time) VALUES (?, ?, 'Created by Go', ?)", res.Registrar.Name, res.Registrar.ReferralURL, currentDate.Format("2006-01-02"))
+						if err != nil {
+							log.Println(err)
+							continue
+						}
+						insertedID, err := result.LastInsertId()
+						if err != nil {
+							log.Println(err)
+							continue
+						}
+						regID = int(insertedID)
+					} else {
 						log.Println(err)
 						continue
 					}
-					id, err := row.LastInsertId()
-					if err != nil {
-						log.Println(err)
-						continue
-					}
-					regID = int(id)
+				} else {
+					regID = id
 				}
-				rows.Scan(&regID)
-				r, err := db.Exec("UPDATE domains SET expiry_date = ?, registrar_id = ?, update_time = ? WHERE id = ?", strings.Split(res.Domain.ExpirationDate, "T")[0], regID, time.Now().Format("2006-01-02"), domain.ID)
+				row = db.QueryRow("SELECT id FROM registrar_accounts WHERE registrar_id = ?", id)
+				err = row.Scan(&id)
+				if err != nil {
+					if err == sql.ErrNoRows {
+						result, err := db.Exec("INSERT INTO registrar_accounts (owner_id, registrar_id, username, email_address, password, account_id, reseller_id, api_app_name, api_key, api_secret, notes, insert_time) VALUES (1, ?, 'Default', 'none@none.com', 'Default', '', '', '', '', '', 'Created by Go', ?)", id, currentDate.Format("2006-01-02"))
+						if err != nil {
+							log.Println(err)
+							continue
+						}
+						insertedID, err := result.LastInsertId()
+						if err != nil {
+							log.Println(err)
+							continue
+						}
+						accID = int(insertedID)
+					} else {
+						log.Println(err)
+						continue
+					}
+				} else {
+					accID = id
+				}
+				r, err := db.Exec("UPDATE domains SET expiry_date = ?, registrar_id = ?, update_time = ?, account_id = ? WHERE id = ?", strings.Split(res.Domain.ExpirationDate, "T")[0], regID, currentDate.Format("2006-01-02"), accID, domain.ID)
 				if err != nil {
 					log.Println(err)
 					continue
@@ -105,6 +132,7 @@ func main() {
 			}
 		}
 		db.Close()
+		log.Println("Done. Waiting for next run... \nSleeping for 220 hours")
 		// sleep ~10 days
 		time.Sleep(220 * time.Hour)
 	}

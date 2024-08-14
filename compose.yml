@@ -1,0 +1,13 @@
+# Add to your domainMOD stack, not to be used independently
+---
+services:
+  updater:
+    image: ghcr.io/1alphabyte/domainmod-whois-updater:latest 
+    container_name: whois-data-updater
+    depends_on:
+      - db
+    environment:
+      - DB_host=db
+      - DB_user=domainmod
+      - DB_password=password1
+    restart: unless-stopped
