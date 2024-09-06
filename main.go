@@ -55,6 +55,7 @@ func main() {
 		domains := getDomains(db)
 
 		currentDate := time.Now()
+		log.Println("Found ", len(domains), " domains")
 		for _, domain := range domains {
 			ExpDate, err := time.Parse("2006-01-02", domain.ExpDate)
 			if err != nil {
@@ -62,7 +63,6 @@ func main() {
 				continue
 			}
 			diff := ExpDate.Sub(currentDate).Hours() / 24
-			log.Println(domain.Domain)
 			if int(diff) <= 25 {
 				result, err := whois.Whois(domain.Domain)
 				if err != nil {
@@ -121,19 +121,18 @@ func main() {
 				} else {
 					accID = id
 				}
-				r, err := db.Exec("UPDATE domains SET expiry_date = ?, registrar_id = ?, update_time = ?, account_id = ? WHERE id = ?", strings.Split(res.Domain.ExpirationDate, "T")[0], regID, currentDate.Format("2006-01-02"), accID, domain.ID)
+				_, err = db.Exec("UPDATE domains SET expiry_date = ?, registrar_id = ?, update_time = ?, account_id = ? WHERE id = ?", strings.Split(res.Domain.ExpirationDate, "T")[0], regID, currentDate.Format("2006-01-02"), accID, domain.ID)
 				if err != nil {
 					log.Println(err)
 					continue
 				}
-				r1, _ := r.RowsAffected()
-				log.Println("Updated", r1)
+				log.Println("Updated ", domain.Domain)
 				time.Sleep(20 * time.Second)
 			}
 		}
 		db.Close()
-		log.Println("Done. Waiting for next run... \nSleeping for 220 hours")
-		// sleep ~10 days
-		time.Sleep(220 * time.Hour)
+		log.Println("Done. Waiting for next run... \nSleeping for ~7 days")
+		// sleep ~7 days
+		time.Sleep(160 * time.Hour)
 	}
 }
