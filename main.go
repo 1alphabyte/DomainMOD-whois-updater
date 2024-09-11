@@ -66,12 +66,12 @@ func main() {
 			if int(diff) <= 25 {
 				result, err := whois.Whois(domain.Domain)
 				if err != nil {
-					log.Println(err)
+					log.Println(err, domain.Domain)
 					continue
 				}
 				res, err := whoisparser.Parse(result)
 				if err != nil {
-					log.Println(err)
+					log.Println(err, domain.Domain)
 					continue
 				}
 				log.Println(strings.Split(res.Domain.ExpirationDate, "T")[0], res.Registrar.Name, res.Domain.NameServers)
@@ -126,7 +126,7 @@ func main() {
 					log.Println(err)
 					continue
 				}
-				log.Println("Updated ", domain.Domain)
+				log.Println("Updated", domain.Domain)
 				time.Sleep(20 * time.Second)
 			}
 		}
