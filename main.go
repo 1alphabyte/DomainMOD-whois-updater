@@ -64,17 +64,33 @@ func main() {
 			}
 			diff := ExpDate.Sub(currentDate).Hours() / 24
 			if int(diff) <= 25 {
+				log.Println("Updating", domain.Domain)
 				result, err := whois.Whois(domain.Domain)
 				if err != nil {
-					log.Println(err, domain.Domain)
+					log.Println(err)
 					continue
 				}
 				res, err := whoisparser.Parse(result)
 				if err != nil {
-					log.Println(err, domain.Domain)
+					log.Println(err)
 					continue
 				}
-				log.Println(strings.Split(res.Domain.ExpirationDate, "T")[0], res.Registrar.Name, res.Domain.NameServers)
+				var p time.Time
+				if strings.Contains(domain.Domain, ".co.uk") {
+					p, err = time.Parse("02-Jan-2006", res.Domain.ExpirationDate)
+					if err != nil {
+						log.Println(err)
+						continue
+					}
+				} else {
+					p, err = time.Parse("2006-01-02T15:04:05Z07:00", res.Domain.ExpirationDate)
+					if err != nil {
+						log.Println(err)
+						continue
+					}
+				}
+				newExpDate := p.Format("2006-01-02")
+				log.Println(newExpDate, res.Registrar.Name, res.Domain.NameServers)
 				var regID, accID int
 				row := db.QueryRow("SELECT id FROM registrars WHERE name = ?", res.Registrar.Name)
 				var id int
@@ -121,7 +137,7 @@ func main() {
 				} else {
 					accID = id
 				}
-				_, err = db.Exec("UPDATE domains SET expiry_date = ?, registrar_id = ?, update_time = ?, account_id = ? WHERE id = ?", strings.Split(res.Domain.ExpirationDate, "T")[0], regID, currentDate.Format("2006-01-02"), accID, domain.ID)
+				_, err = db.Exec("UPDATE domains SET expiry_date = ?, registrar_id = ?, update_time = ?, account_id = ? WHERE id = ?", newExpDate, regID, currentDate.Format("2006-01-02"), accID, domain.ID)
 				if err != nil {
 					log.Println(err)
 					continue
